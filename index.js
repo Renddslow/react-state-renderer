@@ -1,39 +1,58 @@
 const ReactDOM = require('react-dom');
 const React = require('react');
-const { get, has } = require('dot-prop');
+const { has } = require('dot-prop');
 
-module.exports = () => (stateRouter) => ({
-  render: (context, cb) => {
-    if (!has(context.element, 'root')) {
-      const el = React.createElement(context.template);
+// TODO:
+// - Create a context provider for maintaining the stateRouter
+// - Create a stateRouter consumer/HOC for wrapping components
 
-      ReactDOM.render(el, context.element);
+module.exports = () => (stateRouter) => {
+  const asr = {
+    makePath: stateRouter.makePath,
+    stateIsActive: stateRouter.stateIsActive,
+  };
 
-      return cb(null, { parents: [el], root: context.element });
+  const render = (context, cb) => {
+    const { element, template, content, parameters } = context;
+    const props = Object.assign({}, content, parameters, {
+      asr,
+    });
+
+    // Element/Target is an actual DOM Node
+    if (!has(element, 'root')) {
+      const el = React.createElement(template, props);
+
+      ReactDOM.render(el, element);
+
+      return cb(null, { parents: [el], root: element });
     }
 
-    const el = React.createElement(context.template);
+    const el = React.createElement(template, { asr });
 
     let currentEl = el;
-    for (let i = context.element.parents.length - 1; i >= 0; i--) {
-      console.log(currentEl);
-      currentEl = React.cloneElement(context.element.parents[i], {
+    for (let i = element.parents.length - 1; i >= 0; i--) {
+      currentEl = React.cloneElement(element.parents[i], {
         uiView: currentEl,
       });
     }
 
-    ReactDOM.render(currentEl, context.element.root);
+    ReactDOM.render(currentEl, element.root);
     cb(null, {
-      parents: [...context.element.parents, el],
-      root: context.element.root,
+      parents: [...element.parents, el],
+      root: element.root,
     });
-  },
-  reset: (context, cb) => {
-    cb(null);
-  },
-  destroy: (renderedTemplateAPI, cb) => {
-  },
-  getChildElement: (renderedTemplateAPI, cb) => {
-    cb(null, renderedTemplateAPI);
-  },
-});
+  };
+
+  return {
+    render,
+    reset: (context, cb) => {
+      render(context, cb);
+    },
+    destroy: (renderedTemplateAPI, cb) => {
+      cb();
+    },
+    getChildElement: (renderedTemplateAPI, cb) => {
+      cb(null, renderedTemplateAPI);
+    },
+  };
+};
